@@ -214,14 +214,14 @@ async fn run_cmd(
         .current_dir(dir)
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::piped())
+        .kill_on_drop(true)
         .spawn()
         .map_err(|e| format!("lancement {prog} impossible ({e}) — runtime manquant ?"))?;
+    // Note : wait_with_output() consomme `child` ; en cas de timeout le futur
+    // est abandonné, `child` est droppé et kill_on_drop(true) tue le processus.
     let out = match timeout(Duration::from_secs(secs), child.wait_with_output()).await {
         Ok(o) => o.map_err(|e| format!("attente {prog}: {e}"))?,
-        Err(_) => {
-            let _ = child.kill().await;
-            return Err(format!("{prog} : timeout ({secs} s), processus tué"));
-        }
+        Err(_) => return Err(format!("{prog} : timeout ({secs} s), processus tué")),
     };
     let code = out.status.code().unwrap_or(-1);
     Ok((
